@@ -10,7 +10,7 @@ ui = app.userInterface
 CMD_ID = f'{config.COMPANY_NAME}_{config.ADDIN_NAME}_unit_tetrahedron'
 CMD_NAME = 'Unit Tetrahedron'
 CMD_Description = ('Creates a unit tetrahedron. A unit tetrahedron is a regular icosahedron whose points'
-                   'may all be found on the surface of a sphere with a radius of 1')
+                   'may all be found on the surface of a sphere with a radius of 1.')
 IS_PROMOTED = True
 
 PALETTE_ID = config.sample_palette_id

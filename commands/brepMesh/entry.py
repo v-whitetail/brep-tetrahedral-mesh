@@ -58,20 +58,33 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     template_body.setSelectionLimits(1, 1)
     template_body.clearSelectionFilter()
     template_body.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
-
-    node_file = inputs.addBoolValueInput(
-        'node_file_input',
+    node_file_button = inputs.addBoolValueInput(
+        'node_file_button_input',
         'Node File',
         False,
         os.path.join(ICON_FOLDER, 'button'),
         False,
     )
-    element_file = inputs.addBoolValueInput(
-        'edge_file_input',
-        'Edge File',
+    element_file_button = inputs.addBoolValueInput(
+        'element_file_button_input',
+        'Element File File',
         False,
         os.path.join(ICON_FOLDER, 'button'),
         False,
+    )
+    node_file = inputs.addTextBoxCommandInput(
+        'node_file_input',
+        'Selected Node File',
+        'None Selected',
+        1,
+        True,
+    )
+    element_file = inputs.addTextBoxCommandInput(
+        'element_file_input',
+        'Selected Element File',
+        'None Selected',
+        1,
+        True,
     )
 
 def command_execute(args: adsk.core.CommandEventArgs):
@@ -84,20 +97,26 @@ def command_preview(args: adsk.core.CommandEventArgs):
 
 def command_input_changed(args: adsk.core.InputChangedEventArgs):
     changed_input = args.input
-    if changed_input.id == 'node_file_input':
+    if changed_input.id == 'node_file_button_input':
         node_dialog = ui.createFileDialog()
         node_dialog.filter = '*.node'
         node_dialog.title = 'Select Node File'
         node_dialog.isMultiSelectEnabled = False
         node_dialog.initialDirectory = os.path.join(os.path.abspath(pathlib.Path.home()), 'Desktop')
-        node_dialog.showOpen()
-    if changed_input.id == 'element_file_input':
-        node_dialog = ui.createFileDialog()
-        node_dialog.filter = '*.ele'
-        node_dialog.title = 'Select Element File'
-        node_dialog.isMultiSelectEnabled = False
-        node_dialog.initialDirectory = os.path.join(os.path.abspath(pathlib.Path.home()), 'Desktop')
-        node_dialog.showOpen()
+        if node_dialog.showOpen() == adsk.core.DialogResults.DialogOK:
+            node_file = adsk.core.TextBoxCommandInput.cast(args.inputs.itemById('node_file_input'))
+            node_file.formattedText = node_dialog.filename
+
+    if changed_input.id == 'element_file_button_input':
+        element_dialog = ui.createFileDialog()
+        element_dialog.filter = '*.ele'
+        element_dialog.title = 'Select Element File'
+        element_dialog.isMultiSelectEnabled = False
+        element_dialog.initialDirectory = os.path.join(os.path.abspath(pathlib.Path.home()), 'Desktop')
+        if element_dialog.showOpen() == adsk.core.DialogResults.DialogOK:
+            element_file = adsk.core.TextBoxCommandInput.cast(args.inputs.itemById('element_file_input'))
+            element_file.formattedText = element_dialog.filename
+
     futil.log(f'{CMD_NAME} Input Changed Event fired from a change to {changed_input.id}')
 
 def command_destroy(args: adsk.core.CommandEventArgs):

@@ -1,0 +1,13 @@
+{
+	"autodeskProduct":	"Fusion",
+	"type":	"addin",
+	"id":	"2bb296b6-2b1d-4d43-be50-240f50fac940",
+	"author":	"v-whitetail",
+	"description":	{
+		"":	""
+	},
+	"version":	"0.0",
+	"runOnStartup":	false,
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}

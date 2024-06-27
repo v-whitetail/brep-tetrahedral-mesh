@@ -1,11 +1,12 @@
 import adsk.core, adsk.fusion
-import os, pathlib
+import os, pathlib, itertools
+from math import sqrt
 from ...lib import fusionAddInUtils as futil
 from ... import config
 
-
 app = adsk.core.Application.get()
 ui = app.userInterface
+brep_manager = adsk.fusion.TemporaryBRepManager.get()
 
 CMD_ID = f'{config.COMPANY_NAME}_{config.ADDIN_NAME}_brep_mesh'
 CMD_NAME = 'Mesh Body'
@@ -40,15 +41,13 @@ def stop():
     if command_definition:
         command_definition.deleteMe()
 
-
 def command_created(args: adsk.core.CommandCreatedEventArgs):
+    inputs = args.command.commandInputs
     futil.log(f'{CMD_NAME} Command Created Event')
     futil.add_handler(args.command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(args.command.inputChanged, command_input_changed, local_handlers=local_handlers)
     futil.add_handler(args.command.executePreview, command_preview, local_handlers=local_handlers)
     futil.add_handler(args.command.destroy, command_destroy, local_handlers=local_handlers)
-
-    inputs = args.command.commandInputs
 
     template_body = inputs.addSelectionInput(
         'tetrahedron_template_input',
@@ -88,8 +87,51 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     )
 
 def command_execute(args: adsk.core.CommandEventArgs):
-    futil.log(f'{CMD_NAME} Command Execute Event')
     inputs = args.command.commandInputs
+    futil.log(f'{CMD_NAME} Command Execute Event')
+
+    template_body_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('tetrahedron_template_input'))
+    node_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('node_file_input')).text
+    element_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('element_file_input')).text
+
+    node_file_lines = open(node_file_input).readlines()[1:]
+    element_file_lines = open(element_file_input).readlines()[1:-1]
+    nodes = [line.split()[1:] for line in node_file_lines]
+    elements = [line.split()[1:-1] for line in element_file_lines]
+
+    template_body = adsk.fusion.BRepBody.cast(template_body_input.selection(0).entity)
+
+    active_component = adsk.fusion.Design.cast(app.activeProduct).activeComponent
+
+    new_base_feature = active_component.features.baseFeatures.add()
+    new_base_feature.name = "TetrahedralMesh"
+    new_base_feature.startEdit()
+
+    new_bodies = []
+    for element in elements:
+        nodes_in_element = [
+            tuple(map(lambda p: float(p), nodes[int(vertex)-1]))
+            for vertex in element
+        ]
+        raw_target_matrix = [
+            nodes_in_element[0][0], nodes_in_element[1][0], nodes_in_element[2][0], nodes_in_element[3][0],
+            nodes_in_element[0][1], nodes_in_element[1][1], nodes_in_element[2][1], nodes_in_element[3][1],
+            nodes_in_element[0][2], nodes_in_element[1][2], nodes_in_element[2][2], nodes_in_element[3][2],
+            1.0, 1.0, 1.0, 1.0
+        ]
+        target_matrix = adsk.core.Matrix3D.create()
+        target_matrix.setWithArray(raw_target_matrix)
+        transformation_matrix = create_transformation_matrix(target_matrix)
+
+        new_bodies.append(brep_manager.copy(template_body))
+        brep_manager.transform(new_bodies[-1], transformation_matrix)
+
+    target_body = new_bodies[0]
+    for tool_body in new_bodies[1:]:
+        res = brep_manager.booleanOperation(target_body, tool_body, adsk.fusion.BooleanTypes.UnionBooleanType)
+
+    active_component.bRepBodies.add(target_body, new_base_feature)
+    new_base_feature.finishEdit()
 
 def command_preview(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
@@ -123,3 +165,16 @@ def command_destroy(args: adsk.core.CommandEventArgs):
     global local_handlers
     local_handlers = []
     futil.log(f'{CMD_NAME} Command Destroy Event')
+
+def create_transformation_matrix(target: adsk.core.Matrix3D):
+    raw_tetrahedron = [
+        sqrt(8 / 9), -sqrt(2 / 9), -sqrt(2 / 9), 0.0,
+        0.0, -sqrt(2 / 3), sqrt(2 / 3), 0.0,
+        -1 / 3, -1 / 3, -1 / 3, 1.0,
+        1.0, 1.0, 1.0, 1.0,
+    ]
+    transformation_matrix = adsk.core.Matrix3D.create()
+    transformation_matrix.setWithArray(raw_tetrahedron)
+    transformation_matrix.invert()
+    transformation_matrix.transformBy(target)
+    return transformation_matrix

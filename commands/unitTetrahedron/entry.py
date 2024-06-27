@@ -55,7 +55,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
     new_base_feature.name = "UnitTetrahedron"
     new_base_feature.startEdit()
 
-    new_body_definition = defineUnitTetrahedron(adsk.fusion.BRepBodyDefinition.create())
+    new_body_definition = define_unit_tetrahedron(adsk.fusion.BRepBodyDefinition.create())
     new_body = new_body_definition.createBody()
 
     active_component.bRepBodies.add(new_body, new_base_feature)
@@ -66,7 +66,7 @@ def command_destroy(args: adsk.core.CommandEventArgs):
     local_handlers = []
     futil.log(f'{CMD_NAME} Command Destroy Event')
 
-def defineUnitTetrahedron(brep_definition: adsk.fusion.BRepBodyDefinition):
+def define_unit_tetrahedron(brep_definition: adsk.fusion.BRepBodyDefinition):
     raw_tetrahedron = [
         sqrt(8 / 9), -sqrt(2 / 9), -sqrt(2 / 9), 0.0,
         0.0, -sqrt(2 / 3), sqrt(2 / 3), 0.0,

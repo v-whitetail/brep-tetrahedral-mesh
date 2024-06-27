@@ -1,7 +1,8 @@
-import adsk.core
-import os
+import adsk.core, adsk.fusion
+import os, pathlib
 from ...lib import fusionAddInUtils as futil
 from ... import config
+
 
 app = adsk.core.Application.get()
 ui = app.userInterface
@@ -46,13 +47,36 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.add_handler(args.command.inputChanged, command_input_changed, local_handlers=local_handlers)
     futil.add_handler(args.command.executePreview, command_preview, local_handlers=local_handlers)
     futil.add_handler(args.command.destroy, command_destroy, local_handlers=local_handlers)
+
     inputs = args.command.commandInputs
+
+    template_body = inputs.addSelectionInput(
+        'tetrahedron_template_input',
+        'Template Body',
+        'Select a body defined by a unit tetrahedron. This body will be patterned inside the mesh.'
+    )
+    template_body.setSelectionLimits(1, 1)
+    template_body.clearSelectionFilter()
+    template_body.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
+
+    node_file = inputs.addBoolValueInput(
+        'node_file_input',
+        'Node File',
+        False,
+        os.path.join(ICON_FOLDER, 'button'),
+        False,
+    )
+    element_file = inputs.addBoolValueInput(
+        'edge_file_input',
+        'Edge File',
+        False,
+        os.path.join(ICON_FOLDER, 'button'),
+        False,
+    )
 
 def command_execute(args: adsk.core.CommandEventArgs):
     futil.log(f'{CMD_NAME} Command Execute Event')
     inputs = args.command.commandInputs
-    text_input: adsk.core.TextBoxCommandInput = inputs.itemById('text_input')
-    value_input: adsk.core.ValueCommandInput = inputs.itemById('value_input')
 
 def command_preview(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
@@ -60,7 +84,20 @@ def command_preview(args: adsk.core.CommandEventArgs):
 
 def command_input_changed(args: adsk.core.InputChangedEventArgs):
     changed_input = args.input
-    inputs = args.inputs
+    if changed_input.id == 'node_file_input':
+        node_dialog = ui.createFileDialog()
+        node_dialog.filter = '*.node'
+        node_dialog.title = 'Select Node File'
+        node_dialog.isMultiSelectEnabled = False
+        node_dialog.initialDirectory = os.path.join(os.path.abspath(pathlib.Path.home()), 'Desktop')
+        node_dialog.showOpen()
+    if changed_input.id == 'element_file_input':
+        node_dialog = ui.createFileDialog()
+        node_dialog.filter = '*.ele'
+        node_dialog.title = 'Select Element File'
+        node_dialog.isMultiSelectEnabled = False
+        node_dialog.initialDirectory = os.path.join(os.path.abspath(pathlib.Path.home()), 'Desktop')
+        node_dialog.showOpen()
     futil.log(f'{CMD_NAME} Input Changed Event fired from a change to {changed_input.id}')
 
 def command_destroy(args: adsk.core.CommandEventArgs):

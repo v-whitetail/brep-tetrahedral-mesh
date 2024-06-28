@@ -94,10 +94,13 @@ def command_execute(args: adsk.core.CommandEventArgs):
     node_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('node_file_input')).text
     element_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('element_file_input')).text
 
-    node_file_lines = open(node_file_input).readlines()[1:]
+    node_file_lines = open(node_file_input).readlines()[1:-1]
     element_file_lines = open(element_file_input).readlines()[1:-1]
-    nodes = [line.split()[1:] for line in node_file_lines]
+    nodes = {int(line.split()[0]): line.split()[1:] for line in node_file_lines}
     elements = [line.split()[1:-1] for line in element_file_lines]
+
+    futil.log(format(nodes))
+    futil.log(format(elements))
 
     template_body = adsk.fusion.BRepBody.cast(template_body_input.selection(0).entity)
 
@@ -105,12 +108,11 @@ def command_execute(args: adsk.core.CommandEventArgs):
 
     new_base_feature = active_component.features.baseFeatures.add()
     new_base_feature.name = "TetrahedralMesh"
-    new_base_feature.startEdit()
 
     new_bodies = []
     for element in elements:
         nodes_in_element = [
-            tuple(map(lambda p: float(p), nodes[int(vertex)-1]))
+            tuple(map(lambda p: float(p), nodes[int(vertex)]))
             for vertex in element
         ]
         raw_target_matrix = [
@@ -119,6 +121,12 @@ def command_execute(args: adsk.core.CommandEventArgs):
             nodes_in_element[0][2], nodes_in_element[1][2], nodes_in_element[2][2], nodes_in_element[3][2],
             1.0, 1.0, 1.0, 1.0
         ]
+        # raw_target_matrix = [
+        #     nodes_in_element[0][0], nodes_in_element[0][1], nodes_in_element[0][2], 1.0,
+        #     nodes_in_element[1][0], nodes_in_element[1][1], nodes_in_element[1][2], 1.0,
+        #     nodes_in_element[2][0], nodes_in_element[2][1], nodes_in_element[2][2], 1.0,
+        #     nodes_in_element[3][0], nodes_in_element[3][1], nodes_in_element[3][2], 1.0,
+        # ]
         target_matrix = adsk.core.Matrix3D.create()
         target_matrix.setWithArray(raw_target_matrix)
         transformation_matrix = create_transformation_matrix(target_matrix)
@@ -126,12 +134,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
         new_bodies.append(brep_manager.copy(template_body))
         brep_manager.transform(new_bodies[-1], transformation_matrix)
 
-    target_body = new_bodies[0]
-    for tool_body in new_bodies[1:]:
-        res = brep_manager.booleanOperation(target_body, tool_body, adsk.fusion.BooleanTypes.UnionBooleanType)
-
-    active_component.bRepBodies.add(target_body, new_base_feature)
-    new_base_feature.finishEdit()
+    add_bodies_from_array(new_base_feature, new_bodies)
 
 def command_preview(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
@@ -173,8 +176,27 @@ def create_transformation_matrix(target: adsk.core.Matrix3D):
         -1 / 3, -1 / 3, -1 / 3, 1.0,
         1.0, 1.0, 1.0, 1.0,
     ]
-    transformation_matrix = adsk.core.Matrix3D.create()
-    transformation_matrix.setWithArray(raw_tetrahedron)
-    transformation_matrix.invert()
-    transformation_matrix.transformBy(target)
-    return transformation_matrix
+    # raw_tetrahedron = [
+    #     sqrt(8/9), 0.0, -1/3, 1.0,
+    #     -sqrt(2/9), -sqrt(2/3), -1/3, 1.0,
+    #     -sqrt(2/9), sqrt(2/3), -1/3, 1.0,
+    #     0.0, 0.0, 1.0, 1.0
+    # ]
+    inverse_source = adsk.core.Matrix3D.create()
+    inverse_source.setWithArray(raw_tetrahedron)
+    inverse_source.invert()
+    inverse_source.transformBy(target)
+    return inverse_source
+
+def add_bodies_from_array(target_feature: adsk.fusion.BaseFeature, bodies: list[adsk.fusion.BRepBody]):
+    target_feature.startEdit()
+    for body in bodies:
+        res = target_feature.parentComponent.bRepBodies.add(body, target_feature)
+    target_feature.finishEdit()
+
+def join_bodies_from_array(target_feature: adsk.fusion.BaseFeature, bodies: list[adsk.fusion.BRepBody]):
+    target_feature.startEdit()
+    target_body = bodies[0]
+    for tool_body in bodies[1:]:
+        res = brep_manager.booleanOperation(target_body, tool_body, adsk.fusion.BooleanTypes.UnionBooleanType)
+    target_feature.finishEdit()

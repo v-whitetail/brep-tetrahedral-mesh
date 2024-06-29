@@ -68,10 +68,10 @@ def command_destroy(args: adsk.core.CommandEventArgs):
 
 def define_unit_tetrahedron(brep_definition: adsk.fusion.BRepBodyDefinition):
     raw_tetrahedron = [
-        sqrt(8 / 9), -sqrt(2 / 9), -sqrt(2 / 9), 0.0,
-        0.0, -sqrt(2 / 3), sqrt(2 / 3), 0.0,
-        -1 / 3, -1 / 3, -1 / 3, 1.0,
-        1.0, 1.0, 1.0, 1.0,
+        sqrt(2/3), 0.0, sqrt(8/3), sqrt(2/3),
+        sqrt(8/9)+sqrt(2/9), 0.0, 0.0, sqrt(2/9),
+        0.0,  0.0,  0.0, 4/3,
+        1.0,  1.0,  1.0, 1.0,
     ]
     points = [
         adsk.core.Point3D.create(raw_tetrahedron[0], raw_tetrahedron[4], raw_tetrahedron[8]),

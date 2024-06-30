@@ -1,8 +1,6 @@
 from .brepMesh import entry as brepMesh
-from .unitTetrahedron import entry as unitTetrahedron
 
 commands = [
-    unitTetrahedron,
     brepMesh,
 ]
 def start():

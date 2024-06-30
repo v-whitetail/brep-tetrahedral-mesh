@@ -49,36 +49,46 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.add_handler(args.command.executePreview, command_preview, local_handlers=local_handlers)
     futil.add_handler(args.command.destroy, command_destroy, local_handlers=local_handlers)
 
-    template_body = inputs.addSelectionInput(
-        'tetrahedron_template_input',
-        'Template Body',
-        'Select a body defined by a unit tetrahedron. This body will be patterned inside the mesh.'
+    # node_template_input = inputs.addSelectionInput(
+    #     'node_template_input',
+    #     'Template Node',
+    #     'Select a body to serve as template geometry at every node.'
+    # )
+    # node_template_input.setSelectionLimits(1, 1)
+    # node_template_input.clearSelectionFilter()
+    # node_template_input.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
+
+    edge_template_input = inputs.addSelectionInput(
+        'edge_template_input',
+        'Template Edge',
+        'Select a body to serve as template geometry at every node.'
     )
-    template_body.setSelectionLimits(1, 1)
-    template_body.clearSelectionFilter()
-    template_body.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
-    node_file_button = inputs.addBoolValueInput(
+    edge_template_input.setSelectionLimits(1, 1)
+    edge_template_input.clearSelectionFilter()
+    edge_template_input.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
+
+    _node_file_button = inputs.addBoolValueInput(
         'node_file_button_input',
         'Node File',
         False,
         os.path.join(ICON_FOLDER, 'button'),
         False,
     )
-    element_file_button = inputs.addBoolValueInput(
+    _element_file_button = inputs.addBoolValueInput(
         'element_file_button_input',
         'Element File File',
         False,
         os.path.join(ICON_FOLDER, 'button'),
         False,
     )
-    node_file = inputs.addTextBoxCommandInput(
+    _node_file = inputs.addTextBoxCommandInput(
         'node_file_input',
         'Selected Node File',
         'None Selected',
         1,
         True,
     )
-    element_file = inputs.addTextBoxCommandInput(
+    _element_file = inputs.addTextBoxCommandInput(
         'element_file_input',
         'Selected Element File',
         'None Selected',
@@ -90,51 +100,31 @@ def command_execute(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
     futil.log(f'{CMD_NAME} Command Execute Event')
 
-    template_body_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('tetrahedron_template_input'))
+    # node_template_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('node_template_input'))
+    edge_template_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('edge_template_input'))
     node_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('node_file_input')).text
     element_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('element_file_input')).text
 
     node_file_lines = open(node_file_input).readlines()[1:-1]
     element_file_lines = open(element_file_input).readlines()[1:-1]
-    nodes = {int(line.split()[0]): line.split()[1:] for line in node_file_lines}
-    elements = [line.split()[1:-1] for line in element_file_lines]
 
-    futil.log(format(nodes))
-    futil.log(format(elements))
+    nodes = [tuple(map(lambda n: float(n), line.split()[1:])) for line in node_file_lines]
+    elements = [tuple(map(lambda p: int(p) - 1, line.split()[1:-1])) for line in element_file_lines]
+    edges = {tuple(sorted(edge)) for element in elements for edge in itertools.combinations(element, 2)}
 
-    template_body = adsk.fusion.BRepBody.cast(template_body_input.selection(0).entity)
+    # node_template_body = adsk.fusion.BRepBody.cast(node_template_input.selection(0).entity)
+    edge_template_body = adsk.fusion.BRepBody.cast(edge_template_input.selection(0).entity)
 
     active_component = adsk.fusion.Design.cast(app.activeProduct).activeComponent
 
     new_base_feature = active_component.features.baseFeatures.add()
     new_base_feature.name = "TetrahedralMesh"
 
-    new_bodies = []
-    for element in elements:
-        nodes_in_element = [
-            tuple(map(lambda p: float(p), nodes[int(vertex)]))
-            for vertex in element
-        ]
-        raw_target_matrix = [
-            nodes_in_element[0][0], nodes_in_element[1][0], nodes_in_element[2][0], nodes_in_element[3][0],
-            nodes_in_element[0][1], nodes_in_element[1][1], nodes_in_element[2][1], nodes_in_element[3][1],
-            nodes_in_element[0][2], nodes_in_element[1][2], nodes_in_element[2][2], nodes_in_element[3][2],
-            1.0, 1.0, 1.0, 1.0
-        ]
-        # raw_target_matrix = [
-        #     nodes_in_element[0][0], nodes_in_element[0][1], nodes_in_element[0][2], 1.0,
-        #     nodes_in_element[1][0], nodes_in_element[1][1], nodes_in_element[1][2], 1.0,
-        #     nodes_in_element[2][0], nodes_in_element[2][1], nodes_in_element[2][2], 1.0,
-        #     nodes_in_element[3][0], nodes_in_element[3][1], nodes_in_element[3][2], 1.0,
-        # ]
-        target_matrix = adsk.core.Matrix3D.create()
-        target_matrix.setWithArray(raw_target_matrix)
-        transformation_matrix = create_transformation_matrix(target_matrix)
+    new_bodies = [get_new_body(edge_template_body, get_transformation(edge, nodes)) for edge in edges]
 
-        new_bodies.append(brep_manager.copy(template_body))
-        brep_manager.transform(new_bodies[-1], transformation_matrix)
+    join_bodies_from_array(new_base_feature, new_bodies)
 
-    add_bodies_from_array(new_base_feature, new_bodies)
+    _new_remove_feature = active_component.features.removeFeatures.add(edge_template_body)
 
 def command_preview(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
@@ -169,34 +159,49 @@ def command_destroy(args: adsk.core.CommandEventArgs):
     local_handlers = []
     futil.log(f'{CMD_NAME} Command Destroy Event')
 
-def create_transformation_matrix(target: adsk.core.Matrix3D):
-    raw_tetrahedron = [
-        sqrt(8 / 9), -sqrt(2 / 9), -sqrt(2 / 9), 0.0,
-        0.0, -sqrt(2 / 3), sqrt(2 / 3), 0.0,
-        -1 / 3, -1 / 3, -1 / 3, 1.0,
-        1.0, 1.0, 1.0, 1.0,
-    ]
-    # raw_tetrahedron = [
-    #     sqrt(8/9), 0.0, -1/3, 1.0,
-    #     -sqrt(2/9), -sqrt(2/3), -1/3, 1.0,
-    #     -sqrt(2/9), sqrt(2/3), -1/3, 1.0,
-    #     0.0, 0.0, 1.0, 1.0
-    # ]
-    inverse_source = adsk.core.Matrix3D.create()
-    inverse_source.setWithArray(raw_tetrahedron)
-    inverse_source.invert()
-    inverse_source.transformBy(target)
-    return inverse_source
+def get_new_body(template_body: adsk.fusion.BRepBody, transformation_matrix: adsk.core.Matrix3D):
+    new_body = brep_manager.copy(template_body)
+    brep_manager.transform(new_body, transformation_matrix)
+    return new_body
+
+def get_transformation(edge: tuple[int], nodes: list[tuple[float]]):
+    raw_edge = (nodes[edge[0]], nodes[edge[1]])
+    edge_points = (
+        adsk.core.Point3D.create(raw_edge[0][0], raw_edge[0][1], raw_edge[0][2]),
+        adsk.core.Point3D.create(raw_edge[1][0], raw_edge[1][1], raw_edge[1][2])
+    )
+    transformation_matrix = adsk.core.Matrix3D.create()
+    transformation_operation = adsk.core.Matrix3D.create()
+
+    transformation_operation.setCell(0, 0, edge_points[0].distanceTo(edge_points[1]) / sqrt(8/3))
+    transformation_matrix.transformBy(transformation_operation)
+
+    transformation_operation.setToRotateTo(
+        adsk.core.Point3D.create(0.0, 0.0, 0.0).vectorTo(adsk.core.Point3D.create(sqrt(8/3), 0.0, 0.0)),
+        edge_points[0].vectorTo(edge_points[1])
+    )
+    transformation_matrix.transformBy(transformation_operation)
+
+    transformation_operation.setWithArray([
+        1.0, 0.0, 0.0, raw_edge[0][0],
+        0.0, 1.0, 0.0, raw_edge[0][1],
+        0.0, 0.0, 1.0, raw_edge[0][2],
+        0.0, 0.0, 0.0, 1.0,
+    ])
+    transformation_matrix.transformBy(transformation_operation)
+
+    return transformation_matrix
 
 def add_bodies_from_array(target_feature: adsk.fusion.BaseFeature, bodies: list[adsk.fusion.BRepBody]):
     target_feature.startEdit()
     for body in bodies:
-        res = target_feature.parentComponent.bRepBodies.add(body, target_feature)
+        _res = target_feature.parentComponent.bRepBodies.add(body, target_feature)
     target_feature.finishEdit()
 
 def join_bodies_from_array(target_feature: adsk.fusion.BaseFeature, bodies: list[adsk.fusion.BRepBody]):
     target_feature.startEdit()
     target_body = bodies[0]
     for tool_body in bodies[1:]:
-        res = brep_manager.booleanOperation(target_body, tool_body, adsk.fusion.BooleanTypes.UnionBooleanType)
+        _res = brep_manager.booleanOperation(target_body, tool_body, adsk.fusion.BooleanTypes.UnionBooleanType)
+    target_feature.parentComponent.bRepBodies.add(bodies[0], target_feature)
     target_feature.finishEdit()

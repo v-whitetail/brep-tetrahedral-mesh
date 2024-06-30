@@ -1,6 +1,8 @@
 from .brepMesh import entry as brepMesh
+from .defaultJoint import entry as defaultJoint
 
 commands = [
+    defaultJoint,
     brepMesh,
 ]
 def start():

@@ -173,11 +173,11 @@ def get_transformation(edge: tuple[int], nodes: list[tuple[float]]):
     transformation_matrix = adsk.core.Matrix3D.create()
     transformation_operation = adsk.core.Matrix3D.create()
 
-    transformation_operation.setCell(0, 0, edge_points[0].distanceTo(edge_points[1]) / sqrt(8/3))
+    transformation_operation.setCell(0, 0, edge_points[0].distanceTo(edge_points[1]) / 10)
     transformation_matrix.transformBy(transformation_operation)
 
     transformation_operation.setToRotateTo(
-        adsk.core.Point3D.create(0.0, 0.0, 0.0).vectorTo(adsk.core.Point3D.create(sqrt(8/3), 0.0, 0.0)),
+        adsk.core.Point3D.create(0.0, 0.0, 0.0).vectorTo(adsk.core.Point3D.create(10.0, 0.0, 0.0)),
         edge_points[0].vectorTo(edge_points[1])
     )
     transformation_matrix.transformBy(transformation_operation)

@@ -49,14 +49,14 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.add_handler(args.command.executePreview, command_preview, local_handlers=local_handlers)
     futil.add_handler(args.command.destroy, command_destroy, local_handlers=local_handlers)
 
-    # node_template_input = inputs.addSelectionInput(
-    #     'node_template_input',
-    #     'Template Node',
-    #     'Select a body to serve as template geometry at every node.'
-    # )
-    # node_template_input.setSelectionLimits(1, 1)
-    # node_template_input.clearSelectionFilter()
-    # node_template_input.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
+    node_template_input = inputs.addSelectionInput(
+        'node_template_input',
+        'Template Node',
+        'Select a body to serve as template geometry at every node.'
+    )
+    node_template_input.setSelectionLimits(1, 1)
+    node_template_input.clearSelectionFilter()
+    node_template_input.addSelectionFilter(adsk.core.SelectionFilters.Bodies)
 
     edge_template_input = inputs.addSelectionInput(
         'edge_template_input',
@@ -76,7 +76,7 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     )
     _element_file_button = inputs.addBoolValueInput(
         'element_file_button_input',
-        'Element File File',
+        'Element File',
         False,
         os.path.join(ICON_FOLDER, 'button'),
         False,
@@ -100,7 +100,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
     futil.log(f'{CMD_NAME} Command Execute Event')
 
-    # node_template_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('node_template_input'))
+    node_template_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('node_template_input'))
     edge_template_input = adsk.core.SelectionCommandInput.cast(inputs.itemById('edge_template_input'))
     node_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('node_file_input')).text
     element_file_input = adsk.core.TextBoxCommandInput.cast(inputs.itemById('element_file_input')).text
@@ -108,11 +108,21 @@ def command_execute(args: adsk.core.CommandEventArgs):
     node_file_lines = open(node_file_input).readlines()[1:-1]
     element_file_lines = open(element_file_input).readlines()[1:-1]
 
-    nodes = [tuple(map(lambda n: float(n), line.split()[1:])) for line in node_file_lines]
-    elements = [tuple(map(lambda p: int(p) - 1, line.split()[1:-1])) for line in element_file_lines]
-    edges = {tuple(sorted(edge)) for element in elements for edge in itertools.combinations(element, 2)}
+    nodes = [
+        tuple(map(lambda n: float(n), line.split()[1:]))
+        for line in node_file_lines
+    ]
+    elements = [
+        tuple(map(lambda p: int(p) - 1, line.split()[1:-1]))
+        for line in element_file_lines
+    ]
+    edges = list(sorted({
+        tuple(sorted(edge))
+        for element in elements
+        for edge in itertools.combinations(element, 2)
+    }))
 
-    # node_template_body = adsk.fusion.BRepBody.cast(node_template_input.selection(0).entity)
+    node_template_body = adsk.fusion.BRepBody.cast(node_template_input.selection(0).entity)
     edge_template_body = adsk.fusion.BRepBody.cast(edge_template_input.selection(0).entity)
 
     active_component = adsk.fusion.Design.cast(app.activeProduct).activeComponent
@@ -120,11 +130,14 @@ def command_execute(args: adsk.core.CommandEventArgs):
     new_base_feature = active_component.features.baseFeatures.add()
     new_base_feature.name = "TetrahedralMesh"
 
-    new_bodies = [get_new_body(edge_template_body, get_transformation(edge, nodes)) for edge in edges]
+    new_edges = [get_new_edge(edge_template_body, get_edge_transformation(edge, nodes)) for edge in edges]
+    new_nodes = [get_new_node(node_template_body, node) for node in nodes]
+    new_bodies = new_nodes + new_edges
 
     join_bodies_from_array(new_base_feature, new_bodies)
 
     _new_remove_feature = active_component.features.removeFeatures.add(edge_template_body)
+    _new_remove_feature = active_component.features.removeFeatures.add(node_template_body)
 
 def command_preview(args: adsk.core.CommandEventArgs):
     inputs = args.command.commandInputs
@@ -159,12 +172,24 @@ def command_destroy(args: adsk.core.CommandEventArgs):
     local_handlers = []
     futil.log(f'{CMD_NAME} Command Destroy Event')
 
-def get_new_body(template_body: adsk.fusion.BRepBody, transformation_matrix: adsk.core.Matrix3D):
+def get_new_edge(template_body: adsk.fusion.BRepBody, transformation_matrix: adsk.core.Matrix3D):
     new_body = brep_manager.copy(template_body)
     brep_manager.transform(new_body, transformation_matrix)
     return new_body
 
-def get_transformation(edge: tuple[int], nodes: list[tuple[float]]):
+def get_new_node(template_body: adsk.fusion.BRepBody, node: tuple[float]):
+    new_body = brep_manager.copy(template_body)
+    transformation_matrix = adsk.core.Matrix3D.create()
+    transformation_matrix.setWithArray([
+        1.0, 0.0, 0.0, node[0] - 10.0,
+        0.0, 1.0, 0.0, node[1],
+        0.0, 0.0, 1.0, node[2],
+        0.0, 0.0, 0.0, 1.0,
+    ])
+    brep_manager.transform(new_body, transformation_matrix)
+    return new_body
+
+def get_edge_transformation(edge: tuple[int], nodes: list[tuple[float]]):
     raw_edge = (nodes[edge[0]], nodes[edge[1]])
     edge_points = (
         adsk.core.Point3D.create(raw_edge[0][0], raw_edge[0][1], raw_edge[0][2]),

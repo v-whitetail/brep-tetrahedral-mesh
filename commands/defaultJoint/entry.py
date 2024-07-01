@@ -55,9 +55,10 @@ def command_execute(args: adsk.core.CommandEventArgs):
     new_base_feature.name = 'defaultJoint'
     new_base_feature.startEdit()
 
-    new_body = define_default_joint()
+    new_bodies = define_default_joint()
 
-    active_component.bRepBodies.add(new_body, new_base_feature)
+    for new_body in new_bodies:
+        active_component.bRepBodies.add(new_body, new_base_feature)
     new_base_feature.finishEdit()
 
 def command_destroy(args: adsk.core.CommandEventArgs):
@@ -67,13 +68,10 @@ def command_destroy(args: adsk.core.CommandEventArgs):
 
 def define_default_joint():
     bodies = [
-        brep_manager.createSphere(adsk.core.Point3D.create(0.0, 0.0, 0.0), 1.0),
         brep_manager.createSphere(adsk.core.Point3D.create(10.0, 0.0, 0.0), 1.0),
         brep_manager.createCylinderOrCone(
             adsk.core.Point3D.create(0.0, 0.0, 0.0), 0.5,
             adsk.core.Point3D.create(10.0, 0.0, 0.0), 0.5,
         ),
     ]
-    brep_manager.booleanOperation(bodies[0], bodies[1], adsk.fusion.BooleanTypes.UnionBooleanType)
-    brep_manager.booleanOperation(bodies[0], bodies[2], adsk.fusion.BooleanTypes.UnionBooleanType)
-    return bodies[0]
+    return bodies

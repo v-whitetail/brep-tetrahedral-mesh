@@ -15,7 +15,7 @@ The input files for this example may be found in 'Form Example/3D-Files.zip'. Th
 **Output Body**
 ___
 ### Example 2 - NURBS Form:
-The input files for this example may be found in 'Truncated Icosahedron Example/3D-Files.zip'. The relevant mesh files were created with the command 'tetgen.exe -pqAa ExampleInput.stl'.
+The input files for this example may be found in 'Form Example/3D-Files.zip'. The relevant mesh files were created with the command 'tetgen.exe -pqAa ExampleInput.stl'.
 ![Input Body](https://raw.githubusercontent.com/v-whitetail/brep-tetrahedral-mesh/master/Form%20Example/example-input.jpg)
 **Input Body**
 ![Output Body](https://raw.githubusercontent.com/v-whitetail/brep-tetrahedral-mesh/master/Form%20Example/example-output.jpg)
